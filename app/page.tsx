@@ -1,4 +1,4 @@
-import { AuthButton } from "@/components/auth-button";
+import { AppShell } from "@/components/app-shell";
 import {
   Card,
   CardContent,
@@ -7,8 +7,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { hasEnvVars } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { getAuthenticatedAppContext } from "@/lib/app-context";
+import { formatCurrency, type AccountRow } from "@/lib/rolly";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
@@ -39,32 +39,15 @@ async function DashboardContent() {
     );
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { household, profile, supabase } = await getAuthenticatedAppContext();
 
-  if (!user) {
-    redirect("/auth/login");
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name, household_id")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!profile?.household_id) {
-    redirect("/setup");
-  }
-
-  const [{ data: household }, { count: accountsCount }, { count: recurringCount }, { count: pendingPaymentsCount }] =
+  const [
+    { count: accountsCount },
+    { count: recurringCount },
+    { count: pendingPaymentsCount },
+    { data: primaryAccountData },
+  ] =
     await Promise.all([
-      supabase
-        .from("households")
-        .select("name, invite_code")
-        .eq("id", profile.household_id)
-        .maybeSingle(),
       supabase
         .from("accounts")
         .select("*", { count: "exact", head: true }),
@@ -75,91 +58,112 @@ async function DashboardContent() {
         .from("scheduled_payments")
         .select("*", { count: "exact", head: true })
         .eq("status", "pending"),
+      supabase
+        .from("accounts")
+        .select(
+          "id, name, type, current_balance, initial_balance, has_payment_due, payment_due_date, payment_amount, is_primary",
+        )
+        .eq("is_primary", true)
+        .limit(1)
+        .maybeSingle(),
     ]);
 
-  return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(0,122,255,0.18),_transparent_35%),linear-gradient(180deg,#f8fbff_0%,#edf3fb_100%)] px-6 py-8 text-slate-950">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
-        <header className="flex flex-col gap-4 rounded-[28px] border border-white/70 bg-white/85 p-6 shadow-xl shadow-sky-100 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-2">
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sky-700">
-              Rolly
-            </p>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              {household?.name ?? "Your household"}
-            </h1>
-            <p className="text-sm text-slate-600">
-              {profile.display_name
-                ? `Welcome back, ${profile.display_name}.`
-                : "Welcome back."}{" "}
-              Phase 1 is now routing through a real auth and household setup
-              flow.
-            </p>
-          </div>
-          <AuthButton />
-        </header>
+  const primaryAccount = primaryAccountData as AccountRow | null;
 
+  return (
+    <AppShell
+      currentPath="/"
+      householdName={household.name}
+      subtitle={`${profile.display_name ? `Welcome back, ${profile.display_name}.` : "Welcome back."} The household foundation is live, and the accounts slice is now underway.`}
+    >
         <section className="grid gap-4 md:grid-cols-3">
-          <Card className="border-white/70 bg-white/90 shadow-lg shadow-sky-100">
+          <Card className="border-white/70 bg-white/92 shadow-lg shadow-sky-100">
             <CardHeader>
-              <CardDescription>Accounts</CardDescription>
-              <CardTitle className="text-4xl">
+              <CardDescription className="font-medium text-slate-700">
+                Accounts
+              </CardDescription>
+              <CardTitle className="text-4xl text-slate-950">
                 {formatCount(accountsCount)}
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-slate-600">
-              Accounts are ready to be wired into the first feature slice.
+            <CardContent className="text-sm leading-6 text-slate-800">
+              The shared accounts list is now the active Phase 3 build target.
             </CardContent>
           </Card>
-          <Card className="border-white/70 bg-white/90 shadow-lg shadow-sky-100">
+          <Card className="border-white/70 bg-white/92 shadow-lg shadow-sky-100">
             <CardHeader>
-              <CardDescription>Recurring Items</CardDescription>
-              <CardTitle className="text-4xl">
+              <CardDescription className="font-medium text-slate-700">
+                Recurring Items
+              </CardDescription>
+              <CardTitle className="text-4xl text-slate-950">
                 {formatCount(recurringCount)}
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-slate-600">
+            <CardContent className="text-sm leading-6 text-slate-800">
               This will drive the recurring expense migration from Swift.
             </CardContent>
           </Card>
-          <Card className="border-white/70 bg-white/90 shadow-lg shadow-sky-100">
+          <Card className="border-white/70 bg-white/92 shadow-lg shadow-sky-100">
             <CardHeader>
-              <CardDescription>Pending Payments</CardDescription>
-              <CardTitle className="text-4xl">
+              <CardDescription className="font-medium text-slate-700">
+                Pending Payments
+              </CardDescription>
+              <CardTitle className="text-4xl text-slate-950">
                 {formatCount(pendingPaymentsCount)}
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-slate-600">
+            <CardContent className="text-sm leading-6 text-slate-800">
               Scheduled payments will later be processed by server-side jobs.
             </CardContent>
           </Card>
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[1.3fr,0.9fr]">
-          <Card className="border-white/70 bg-white/90 shadow-lg shadow-sky-100">
+          <Card className="border-white/70 bg-white/92 shadow-lg shadow-sky-100">
             <CardHeader>
-              <CardTitle>Phase 1 status</CardTitle>
-              <CardDescription>
-                The starter project now behaves like the beginning of Rolly
-                instead of the generic Supabase template.
+              <CardTitle className="text-slate-950">Home snapshot</CardTitle>
+              <CardDescription className="text-slate-700">
+                The home dashboard now reflects the next app slice instead of
+                template copy.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4 text-sm text-slate-700">
+            <CardContent className="space-y-4 text-sm text-slate-800">
+              {primaryAccount ? (
+                <div className="rounded-[24px] border border-sky-200 bg-sky-50 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-800">
+                    Primary account
+                  </p>
+                  <h2 className="mt-3 text-2xl font-semibold text-slate-950">
+                    {primaryAccount.name}
+                  </h2>
+                  <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+                    {formatCurrency(primaryAccount.current_balance)}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">
+                    This will become the main balance card from the iOS home
+                    view as we keep building out the dashboard.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 p-5">
+                  <p className="text-sm leading-6 text-slate-800">
+                    No primary account yet. Add one from the Accounts tab and
+                    it will show up here.
+                  </p>
+                </div>
+              )}
+
               <div className="rounded-2xl bg-slate-50 p-4">
-                Auth redirects now land in the app shell, new users are sent to
-                household setup, and the setup flow can create or join a
-                household.
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
-                The next implementation slice is clear: accounts UI, then
-                expenses and recurring items on top of this foundation.
+                Next up after this accounts foundation: account detail, payment
+                due state, and then the expense flows that sit on top of those
+                accounts.
               </div>
             </CardContent>
           </Card>
 
           <Card className="border-white/70 bg-slate-950 text-white shadow-lg shadow-sky-100">
             <CardHeader>
-              <CardTitle>Household details</CardTitle>
+              <CardTitle className="text-white">Household details</CardTitle>
               <CardDescription className="text-slate-300">
                 Use this invite code when you connect the second user.
               </CardDescription>
@@ -180,8 +184,7 @@ async function DashboardContent() {
             </CardContent>
           </Card>
         </section>
-      </div>
-    </main>
+    </AppShell>
   );
 }
 
