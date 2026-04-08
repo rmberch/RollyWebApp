@@ -44,7 +44,7 @@ create unique index one_primary_per_household
 -- 4. budget_settings
 create table public.budget_settings (
     household_id        uuid primary key references public.households(id) on delete cascade,
-    spending_limit      numeric(12,2) not null default 1500,
+    spending_limit      numeric(12,2) not null default 300,
     updated_at          timestamptz not null default now()
 );
 
@@ -87,7 +87,7 @@ create table public.recurring_expenses (
     type                text not null check (type in ('bill','subscription')),
     frequency           text not null check (frequency in (
                             'daily','weekly','biWeekly','semiMonthly',
-                            'monthly','quarterly','semiAnnualy','yearly')),
+                            'monthly','quarterly','semiAnnually','yearly')),
     next_due_date       date not null,
     is_active           boolean not null default true,
     created_at          timestamptz not null default now(),
@@ -137,4 +137,3 @@ $$;
 create trigger on_auth_user_created
     after insert on auth.users
     for each row execute function public.handle_new_user();
-
