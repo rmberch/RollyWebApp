@@ -1,3 +1,5 @@
+import { AuthShell } from "@/components/auth-shell";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -6,32 +8,40 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 
 export default function Page() {
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
+    <AuthShell
+      eyebrow="Confirm Email"
+      title="One more step and your household is ready."
+      description="Use the link in your inbox to confirm your account, then you’ll come right back to finish setup or join a household."
+    >
+      <div className="mx-auto w-full max-w-md">
         <div className="flex flex-col gap-6">
-          <Card>
+          <Card className="border-white/80 bg-white/92 shadow-2xl shadow-sky-100">
             <CardHeader>
-              <CardTitle className="text-2xl">
+              <CardTitle className="text-3xl text-slate-950">
                 Check your email
               </CardTitle>
-              <CardDescription>Confirm your account to finish setup</CardDescription>
+              <CardDescription className="text-base text-slate-700">
+                Confirm your account to finish setup
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-slate-700">
                 We sent a confirmation link to your inbox. Once you open it,
                 you&apos;ll come back here and continue with household setup.
               </p>
-              <Button asChild className="mt-4 w-full">
+              <Button
+                asChild
+                className="mt-4 w-full bg-slate-950 text-white hover:bg-slate-800"
+              >
                 <Link href="/auth/login">Back to sign in</Link>
               </Button>
             </CardContent>
           </Card>
         </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }

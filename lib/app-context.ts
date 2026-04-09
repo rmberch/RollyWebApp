@@ -21,6 +21,8 @@ export async function getAuthenticatedAppContext() {
     redirect("/setup");
   }
 
+  await supabase.rpc("process_due_scheduled_payments_for_current_user");
+
   const { data: household } = await supabase
     .from("households")
     .select("id, name, invite_code")

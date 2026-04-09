@@ -16,11 +16,13 @@ import { getAuthenticatedAppContext } from "@/lib/app-context";
 import {
   formatCurrency,
   formatDate,
+  formatTransactionAmount,
   getAccountHeroMutedTextClass,
   getAccountHeroSurfaceClass,
   getAccountHeroTextClass,
   getAccountTypeLabel,
   type AccountRow,
+  type ScheduledPaymentRow,
 } from "@/lib/rolly";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -41,13 +43,37 @@ async function AccountDetailContent({
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const { household, profile, supabase } = await getAuthenticatedAppContext();
 
-  const { data: accountData } = await supabase
-    .from("accounts")
-    .select(
-      "id, name, type, current_balance, initial_balance, has_payment_due, payment_due_date, payment_amount, is_primary",
-    )
-    .eq("id", id)
-    .maybeSingle();
+  const [
+    { data: accountData },
+    { data: sourceAccountsData },
+    { data: scheduledPaymentsData },
+    { data: transactionsData },
+  ] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select(
+        "id, name, type, current_balance, initial_balance, has_payment_due, payment_due_date, payment_amount, is_primary",
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("accounts")
+      .select("id, name, current_balance")
+      .in("type", ["checking", "savings"])
+      .order("name"),
+    supabase
+      .from("scheduled_payments")
+      .select("id, amount, scheduled_date, source_account_id, dest_account_id, status")
+      .eq("dest_account_id", id)
+      .eq("status", "pending")
+      .order("scheduled_date"),
+    supabase
+      .from("expenses")
+      .select("id, name, amount, date, source")
+      .eq("account_id", id)
+      .order("date", { ascending: false })
+      .limit(12),
+  ]);
 
   if (!accountData) {
     notFound();
@@ -56,6 +82,21 @@ async function AccountDetailContent({
   const account = accountData as AccountRow;
   const supportsPaymentDue =
     account.type === "credit" || account.type === "loan";
+  const sourceAccounts =
+    sourceAccountsData?.map((sourceAccount) => ({
+      id: sourceAccount.id,
+      name: sourceAccount.name,
+      current_balance: sourceAccount.current_balance,
+    })) ?? [];
+  const scheduledPayments = (scheduledPaymentsData ?? []) as ScheduledPaymentRow[];
+  const transactions =
+    transactionsData?.map((transaction) => ({
+      id: transaction.id,
+      name: transaction.name,
+      amount: transaction.amount,
+      date: transaction.date,
+      source: transaction.source,
+    })) ?? [];
 
   return (
     <AppShell
@@ -176,11 +217,56 @@ async function AccountDetailContent({
               </div>
             </CardContent>
           </Card>
+
+          <Card className="border-white/70 bg-white/92 shadow-lg shadow-sky-100">
+            <CardHeader>
+              <CardTitle className="text-slate-950">
+                Recent transactions
+              </CardTitle>
+              <CardDescription className="text-slate-700">
+                Payments, contributions, and expenses for this account all land
+                in the same running log.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {transactions.length === 0 ? (
+                <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                  No transactions yet for this account.
+                </div>
+              ) : (
+                transactions.map((transaction) => (
+                  <div
+                    key={transaction.id}
+                    className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4"
+                  >
+                    <div className="space-y-1">
+                      <p className="font-medium text-slate-950">
+                        {transaction.name}
+                      </p>
+                      <p className="text-sm text-slate-700">
+                        {formatDate(transaction.date)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-slate-950">
+                        {formatTransactionAmount(transaction.amount)}
+                      </p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                        {transaction.source}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <AccountActionMenu
           account={account}
           supportsPaymentDue={supportsPaymentDue}
+          sourceAccounts={sourceAccounts}
+          scheduledPayments={scheduledPayments}
         />
       </section>
     </AppShell>

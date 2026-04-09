@@ -14,6 +14,15 @@ export type AccountRow = {
   is_primary: boolean;
 };
 
+export type ScheduledPaymentRow = {
+  id: string;
+  amount: number;
+  scheduled_date: string;
+  source_account_id: string | null;
+  dest_account_id: string | null;
+  status: string;
+};
+
 const accountTypeLabels: Record<AccountType, string> = {
   checking: "Checking",
   savings: "Savings",
@@ -30,6 +39,10 @@ export function formatCurrency(value: number | null | undefined) {
     style: "currency",
     currency: "USD",
   }).format(value ?? 0);
+}
+
+export function formatTransactionAmount(value: number | null | undefined) {
+  return formatCurrency(Math.abs(value ?? 0));
 }
 
 export function groupAccountsByType(accounts: AccountRow[]) {
@@ -128,4 +141,16 @@ export function formatDate(value: string | null | undefined) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
+}
+
+export function accountSupportsPaymentDue(type: AccountType) {
+  return type === "credit" || type === "loan";
+}
+
+export function accountCanReceiveContribution(type: AccountType) {
+  return type === "checking" || type === "savings";
+}
+
+export function accountCanBeTransferSource(type: AccountType) {
+  return type === "checking" || type === "savings";
 }

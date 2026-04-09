@@ -253,3 +253,86 @@ export async function deleteAccount(formData: FormData) {
 
   redirect("/accounts");
 }
+
+export async function makeAccountPayment(formData: FormData) {
+  const { supabase } = await getHouseholdId();
+  const destAccountId = String(formData.get("dest_account_id") ?? "");
+  const sourceAccountId = String(formData.get("source_account_id") ?? "");
+  const amount = Number(formData.get("amount") ?? 0);
+  const date = String(formData.get("date") ?? "").trim() || new Date().toISOString().slice(0, 10);
+
+  const { error } = await supabase.rpc("make_account_payment_for_current_user", {
+    dest_account_id: destAccountId,
+    source_account_id: sourceAccountId,
+    payment_amount: amount,
+    payment_date: date,
+  });
+
+  if (error) {
+    redirect(`/accounts/${destAccountId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  redirect(`/accounts/${destAccountId}`);
+}
+
+export async function makeAccountContribution(formData: FormData) {
+  const { supabase } = await getHouseholdId();
+  const destAccountId = String(formData.get("dest_account_id") ?? "");
+  const sourceAccountId = String(formData.get("source_account_id") ?? "").trim();
+  const amount = Number(formData.get("amount") ?? 0);
+  const date = String(formData.get("date") ?? "").trim() || new Date().toISOString().slice(0, 10);
+  const title = String(formData.get("title") ?? "").trim();
+
+  const { error } = await supabase.rpc("make_account_contribution_for_current_user", {
+    dest_account_id: destAccountId,
+    source_account_id: sourceAccountId || null,
+    contribution_amount: amount,
+    contribution_date: date,
+    contribution_title: sourceAccountId ? null : title,
+  });
+
+  if (error) {
+    redirect(`/accounts/${destAccountId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  redirect(`/accounts/${destAccountId}`);
+}
+
+export async function scheduleAccountPayment(formData: FormData) {
+  const { supabase } = await getHouseholdId();
+  const destAccountId = String(formData.get("dest_account_id") ?? "");
+  const sourceAccountId = String(formData.get("source_account_id") ?? "");
+  const amount = Number(formData.get("amount") ?? 0);
+  const scheduledDate =
+    String(formData.get("scheduled_date") ?? "").trim() ||
+    new Date().toISOString().slice(0, 10);
+
+  const { error } = await supabase.rpc("schedule_payment_for_current_user", {
+    dest_account_id: destAccountId,
+    source_account_id: sourceAccountId,
+    payment_amount: amount,
+    scheduled_for: scheduledDate,
+  });
+
+  if (error) {
+    redirect(`/accounts/${destAccountId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  redirect(`/accounts/${destAccountId}`);
+}
+
+export async function cancelScheduledPayment(formData: FormData) {
+  const { supabase } = await getHouseholdId();
+  const paymentId = String(formData.get("payment_id") ?? "");
+  const accountId = String(formData.get("account_id") ?? "");
+
+  const { error } = await supabase.rpc("cancel_scheduled_payment_for_current_user", {
+    target_payment_id: paymentId,
+  });
+
+  if (error) {
+    redirect(`/accounts/${accountId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  redirect(`/accounts/${accountId}`);
+}

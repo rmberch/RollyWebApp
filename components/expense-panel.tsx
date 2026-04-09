@@ -4,7 +4,7 @@ import { addExpense, deleteExpense, updateExpense } from "@/app/expenses/actions
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatCurrency } from "@/lib/rolly";
+import { formatTransactionAmount } from "@/lib/rolly";
 import { ChevronDown, ChevronUp, PencilLine, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -186,41 +186,47 @@ function ExpenseList({
 
                   <div className="flex items-center gap-2">
                     <p className="text-lg font-semibold text-slate-950">
-                      {formatCurrency(expense.amount)}
+                      {formatTransactionAmount(expense.amount)}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpanded((current) =>
-                          current === expense.id ? null : expense.id,
-                        )
-                      }
-                      className="rounded-full border border-slate-300 p-2 text-slate-700 transition-colors hover:bg-slate-100"
-                    >
-                      <PencilLine className="h-4 w-4" />
-                    </button>
-                    <form
-                      action={deleteExpense}
-                      onSubmit={(event) => {
-                        if (
-                          !window.confirm(`Delete ${expense.name}? This will reverse its balance effect.`)
-                        ) {
-                          event.preventDefault();
-                        }
-                      }}
-                    >
-                      <input type="hidden" name="expense_id" value={expense.id} />
-                      <button
-                        type="submit"
-                        className="rounded-full border border-rose-300 p-2 text-rose-700 transition-colors hover:bg-rose-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </form>
+                    {expense.source === "manual" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpanded((current) =>
+                              current === expense.id ? null : expense.id,
+                            )
+                          }
+                          className="rounded-full border border-slate-300 p-2 text-slate-700 transition-colors hover:bg-slate-100"
+                        >
+                          <PencilLine className="h-4 w-4" />
+                        </button>
+                        <form
+                          action={deleteExpense}
+                          onSubmit={(event) => {
+                            if (
+                              !window.confirm(
+                                `Delete ${expense.name}? This will reverse its balance effect.`,
+                              )
+                            ) {
+                              event.preventDefault();
+                            }
+                          }}
+                        >
+                          <input type="hidden" name="expense_id" value={expense.id} />
+                          <button
+                            type="submit"
+                            className="rounded-full border border-rose-300 p-2 text-rose-700 transition-colors hover:bg-rose-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </form>
+                      </>
+                    ) : null}
                   </div>
                 </div>
 
-                {isExpanded ? (
+                {isExpanded && expense.source === "manual" ? (
                   <div className="mt-4">
                     <ExpenseForm
                       accounts={accounts}
