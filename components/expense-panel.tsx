@@ -22,11 +22,18 @@ type ExpenseRow = {
   is_tracked: boolean;
   account_id: string | null;
   account_name: string | null;
+  personal_profile_id?: string | null;
+  personal_profile_name?: string | null;
   source: string;
 };
 
 type ExpensePanelProps = {
   accounts: ExpenseAccount[];
+  householdMembers: Array<{
+    id: string;
+    display_name: string;
+  }>;
+  personalSpendingEnabled: boolean;
   trackedExpenses: ExpenseRow[];
   billExpenses: ExpenseRow[];
 };
@@ -58,15 +65,32 @@ function ToggleButton({
 
 function ExpenseForm({
   accounts,
+  householdMembers,
+  personalSpendingEnabled,
   expense,
   onSubmitAction,
   submitLabel,
 }: {
   accounts: ExpenseAccount[];
+  householdMembers: Array<{
+    id: string;
+    display_name: string;
+  }>;
+  personalSpendingEnabled: boolean;
   expense?: ExpenseRow;
   onSubmitAction: (formData: FormData) => void;
   submitLabel: string;
 }) {
+  const [entryType, setEntryType] = useState(
+    expense ? (expense.is_tracked ? "expense" : "bill") : "expense",
+  );
+  const [isPersonalExpense, setIsPersonalExpense] = useState(
+    Boolean(expense?.personal_profile_id),
+  );
+  const showPersonalFields =
+    entryType === "expense" &&
+    (personalSpendingEnabled || Boolean(expense?.personal_profile_id));
+
   return (
     <form action={onSubmitAction} className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
       {expense ? <input type="hidden" name="expense_id" value={expense.id} /> : null}
@@ -107,13 +131,65 @@ function ExpenseForm({
         <select
           id={expense ? `entry-type-${expense.id}` : "entry-type"}
           name="entry_type"
-          defaultValue={expense ? (expense.is_tracked ? "expense" : "bill") : "expense"}
+          value={entryType}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setEntryType(nextValue);
+
+            if (nextValue !== "expense") {
+              setIsPersonalExpense(false);
+            }
+          }}
           className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
         >
           <option value="expense">Expense</option>
           <option value="bill">Bill</option>
         </select>
       </div>
+      {showPersonalFields ? (
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              name="is_personal_expense"
+              checked={isPersonalExpense}
+              onChange={(event) => setIsPersonalExpense(event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-950 focus:ring-sky-200"
+            />
+            <div className="space-y-1">
+              <p className="font-medium text-slate-950">Personal expense</p>
+              <p className="text-sm text-slate-700">
+                Count this against both the household spending limit and one
+                member&apos;s personal spending amount.
+              </p>
+            </div>
+          </label>
+
+          {isPersonalExpense ? (
+            <div className="space-y-2">
+              <Label
+                htmlFor={expense ? `personal-profile-${expense.id}` : "personal-profile"}
+                className="text-slate-900"
+              >
+                Counts against
+              </Label>
+              <select
+                id={expense ? `personal-profile-${expense.id}` : "personal-profile"}
+                name="personal_profile_id"
+                defaultValue={expense?.personal_profile_id ?? householdMembers[0]?.id ?? ""}
+                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
+                required={isPersonalExpense}
+              >
+                {householdMembers.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.display_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="space-y-2">
         <Label htmlFor={expense ? `account-${expense.id}` : "account"} className="text-slate-900">
           Method
@@ -157,11 +233,18 @@ function ExpenseList({
   emptyText,
   expenses,
   accounts,
+  householdMembers,
+  personalSpendingEnabled,
 }: {
   title: string;
   emptyText: string;
   expenses: ExpenseRow[];
   accounts: ExpenseAccount[];
+  householdMembers: Array<{
+    id: string;
+    display_name: string;
+  }>;
+  personalSpendingEnabled: boolean;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -197,6 +280,11 @@ function ExpenseList({
                       <span className="rounded-full border border-slate-300 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-800">
                         {expense.account_name ?? "Deleted account"}
                       </span>
+                      {expense.personal_profile_name ? (
+                        <span className="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-950">
+                          Personal · {expense.personal_profile_name}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="text-sm text-slate-700">{expense.date}</p>
                   </div>
@@ -247,6 +335,8 @@ function ExpenseList({
                   <div className="mt-4">
                     <ExpenseForm
                       accounts={accounts}
+                      householdMembers={householdMembers}
+                      personalSpendingEnabled={personalSpendingEnabled}
                       expense={expense}
                       onSubmitAction={updateExpense}
                       submitLabel="Save changes"
@@ -264,6 +354,8 @@ function ExpenseList({
 
 export function ExpensePanel({
   accounts,
+  householdMembers,
+  personalSpendingEnabled,
   trackedExpenses,
   billExpenses,
 }: ExpensePanelProps) {
@@ -290,6 +382,8 @@ export function ExpensePanel({
           {showAddForm ? (
             <ExpenseForm
               accounts={accounts}
+              householdMembers={householdMembers}
+              personalSpendingEnabled={personalSpendingEnabled}
               onSubmitAction={addExpense}
               submitLabel="Save expense"
             />
@@ -302,6 +396,8 @@ export function ExpensePanel({
         emptyText="Bills generated from recurring logic will appear here."
         expenses={billExpenses}
         accounts={accounts}
+        householdMembers={householdMembers}
+        personalSpendingEnabled={personalSpendingEnabled}
       />
 
       <ExpenseList
@@ -309,6 +405,8 @@ export function ExpensePanel({
         emptyText="No tracked expenses yet."
         expenses={trackedExpenses}
         accounts={accounts}
+        householdMembers={householdMembers}
+        personalSpendingEnabled={personalSpendingEnabled}
       />
     </div>
   );

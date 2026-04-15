@@ -67,6 +67,44 @@ export async function updateDisplayName(formData: FormData) {
   redirect("/settings?success=Profile%20updated");
 }
 
+export async function updatePersonalSpendingSettings(formData: FormData) {
+  const { supabase } = await getSupabase();
+
+  const personalEnabled = String(formData.get("personal_spending_enabled") ?? "") === "on";
+  const memberLimits = Array.from(formData.entries())
+    .filter(([key]) => key.startsWith("member_limit_"))
+    .map(([key, value]) => {
+      const memberId = key.replace("member_limit_", "");
+      const numericValue = Number(value ?? 0);
+
+      return {
+        member_id: memberId,
+        discretionary_spending_limit:
+          Number.isFinite(numericValue) && numericValue >= 0
+            ? Number(numericValue.toFixed(2))
+            : 0,
+      };
+    });
+
+  const { error } = await supabase.rpc(
+    "update_personal_spending_settings_for_current_user",
+    {
+      personal_enabled: personalEnabled,
+      member_limits: memberLimits,
+    },
+  );
+
+  if (error) {
+    redirect(
+      `/settings?error=${encodeURIComponent(
+        error.message || "Unable to update personal spending settings",
+      )}`,
+    );
+  }
+
+  redirect("/settings?success=Personal%20spending%20settings%20updated");
+}
+
 function normalizeDate(value: FormDataEntryValue | null) {
   const date = String(value ?? "").trim();
   return date || getAppDateString();

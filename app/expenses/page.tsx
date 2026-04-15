@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { ExpensePanel } from "@/components/expense-panel";
+import { PersonalSpendingCard } from "@/components/personal-spending-card";
 import {
   Card,
   CardDescription,
@@ -23,8 +24,8 @@ type ExpenseQueryRow = {
   date: string;
   is_tracked: boolean;
   account_id: string | null;
+  personal_profile_id: string | null;
   source: string;
-  accounts: { name: string }[] | null;
 };
 
 async function ExpensesContent({
@@ -37,7 +38,12 @@ async function ExpensesContent({
   const { household, profile, supabase } = await getAuthenticatedAppContext();
   const today = getAppDateString();
 
-  const [{ data: accountsData }, { data: activePeriod }] = await Promise.all([
+  const [
+    { data: accountsData },
+    { data: activePeriod },
+    { data: householdProfiles },
+    { data: budgetSettings },
+  ] = await Promise.all([
     supabase
       .from("accounts")
       .select("id, name, type")
@@ -53,11 +59,22 @@ async function ExpensesContent({
       .order("month", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("id, display_name, discretionary_spending_limit")
+      .eq("household_id", household.id),
+    supabase
+      .from("budget_settings")
+      .select("personal_spending_enabled")
+      .eq("household_id", household.id)
+      .maybeSingle(),
   ]);
 
   let expensesQuery = supabase
     .from("expenses")
-    .select("id, period_id, name, amount, date, is_tracked, account_id, source")
+    .select(
+      "id, period_id, name, amount, date, is_tracked, account_id, personal_profile_id, source",
+    )
     .eq("household_id", household.id)
     .order("date", { ascending: false });
 
@@ -80,6 +97,23 @@ async function ExpensesContent({
   const accountNameById = new Map(
     householdAccounts.map((account) => [account.id, account.name]),
   );
+  const memberNameById = new Map(
+    (householdProfiles ?? []).map((member) => [
+      member.id,
+      member.display_name?.trim() || "Household member",
+    ]),
+  );
+  const personalSpendingEnabled = Boolean(
+    budgetSettings?.personal_spending_enabled,
+  );
+  const householdMembers =
+    (householdProfiles ?? []).map((member) => ({
+      id: member.id,
+      display_name: member.display_name?.trim() || "Household member",
+      discretionary_spending_limit: Number(
+        member.discretionary_spending_limit ?? 0,
+      ),
+    })) ?? [];
 
   const expenses =
     (expensesData as ExpenseQueryRow[] | null)?.map((expense) => ({
@@ -91,6 +125,10 @@ async function ExpensesContent({
         account_id: expense.account_id,
         account_name: expense.account_id
           ? accountNameById.get(expense.account_id) ?? null
+          : null,
+        personal_profile_id: expense.personal_profile_id,
+        personal_profile_name: expense.personal_profile_id
+          ? memberNameById.get(expense.personal_profile_id) ?? "Household member"
           : null,
         source: expense.source,
       })) ?? [];
@@ -112,6 +150,17 @@ async function ExpensesContent({
   const billTotal = billExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const spendingLimit = Number(activePeriod?.spending_limit ?? 0);
   const remaining = spendingLimit - trackedTotal;
+  const personalSpendingByMember = householdMembers.map((member) => {
+    const spent = trackedExpenses
+      .filter((expense) => expense.personal_profile_id === member.id)
+      .reduce((sum, expense) => sum + expense.amount, 0);
+
+    return {
+      ...member,
+      spent,
+      remaining: member.discretionary_spending_limit - spent,
+    };
+  });
 
   return (
     <AppShell
@@ -180,8 +229,14 @@ async function ExpensesContent({
             </Card>
           </section>
 
+          {personalSpendingEnabled ? (
+            <PersonalSpendingCard members={personalSpendingByMember} />
+          ) : null}
+
           <ExpensePanel
             accounts={accounts}
+            householdMembers={householdMembers}
+            personalSpendingEnabled={personalSpendingEnabled}
             trackedExpenses={trackedExpenses}
             billExpenses={billExpenses}
           />

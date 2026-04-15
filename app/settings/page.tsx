@@ -1,4 +1,7 @@
-import { updateSpendingLimit } from "@/app/settings/actions";
+import {
+  updatePersonalSpendingSettings,
+  updateSpendingLimit,
+} from "@/app/settings/actions";
 import { AppShell } from "@/components/app-shell";
 import { RecurringSettingsCard } from "@/components/recurring-settings-card";
 import { UserSettingsCard } from "@/components/user-settings-card";
@@ -49,7 +52,7 @@ async function SettingsContent({
   ] = await Promise.all([
     supabase
       .from("budget_settings")
-      .select("spending_limit")
+      .select("spending_limit, personal_spending_enabled")
       .eq("household_id", household.id)
       .maybeSingle(),
     supabase.rpc("ensure_current_expense_period", {
@@ -58,7 +61,7 @@ async function SettingsContent({
     }),
     supabase
       .from("profiles")
-      .select("id, display_name, created_at")
+      .select("id, display_name, created_at, discretionary_spending_limit")
       .eq("household_id", household.id)
       .order("created_at"),
     supabase
@@ -111,6 +114,9 @@ async function SettingsContent({
         id: member.id,
         display_name: member.display_name?.trim() || "Household member",
         created_at: member.created_at,
+        discretionary_spending_limit: Number(
+          member.discretionary_spending_limit ?? 0,
+        ),
         isCurrentUser: member.id === user.id,
       }))
       .sort((left, right) => {
@@ -195,6 +201,114 @@ async function SettingsContent({
               </div>
               <Button className="w-full bg-slate-950 text-white hover:bg-slate-800">
                 Save spending limit
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/70 bg-white/92 shadow-lg shadow-sky-100">
+          <CardHeader>
+            <CardTitle className="text-slate-950">Personal spending</CardTitle>
+            <CardDescription className="text-slate-700">
+              Give each household member their own optional fun-money limit for
+              the current cycle.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+                  Status
+                </p>
+                <p className="mt-2 text-xl font-semibold text-slate-950">
+                  {budgetSettings?.personal_spending_enabled ? "Enabled" : "Off"}
+                </p>
+                <p className="mt-2 text-sm text-slate-700">
+                  Personal expenses still count toward the household spending
+                  limit too.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+                  Member limits
+                </p>
+                <p className="mt-2 text-xl font-semibold text-slate-950">
+                  {householdMembers.length}
+                </p>
+                <p className="mt-2 text-sm text-slate-700">
+                  Each member can have a different amount.
+                </p>
+              </div>
+            </div>
+
+            <form
+              action={updatePersonalSpendingSettings}
+              className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4"
+            >
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+                <input
+                  type="checkbox"
+                  name="personal_spending_enabled"
+                  defaultChecked={Boolean(budgetSettings?.personal_spending_enabled)}
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-950 focus:ring-sky-200"
+                />
+                <div className="space-y-1">
+                  <p className="font-medium text-slate-950">
+                    Enable personal spending
+                  </p>
+                  <p className="text-sm text-slate-700">
+                    When this is on, personal expenses can be assigned to a
+                    household member and compared against that member&apos;s
+                    discretionary amount.
+                  </p>
+                </div>
+              </label>
+
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-950">
+                  Per-member amount per cycle
+                </p>
+                <div className="space-y-3">
+                  {householdMembers.map((member) => (
+                    <div
+                      key={member.id}
+                      className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_180px]"
+                    >
+                      <div>
+                        <p className="font-medium text-slate-950">
+                          {member.display_name}
+                        </p>
+                        <p className="text-sm text-slate-700">
+                          {member.isCurrentUser
+                            ? "Your personal spending amount for each cycle."
+                            : "This member's personal spending amount for each cycle."}
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label
+                          htmlFor={`member_limit_${member.id}`}
+                          className="text-slate-900"
+                        >
+                          Amount
+                        </Label>
+                        <Input
+                          id={`member_limit_${member.id}`}
+                          name={`member_limit_${member.id}`}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          defaultValue={member.discretionary_spending_limit}
+                          className="border-slate-300 bg-white text-slate-950"
+                          required
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Button className="w-full bg-slate-950 text-white hover:bg-slate-800">
+                Save personal spending settings
               </Button>
             </form>
           </CardContent>
