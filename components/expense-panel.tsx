@@ -98,6 +98,23 @@ function ExpenseForm({
         />
       </div>
       <div className="space-y-2">
+        <Label
+          htmlFor={expense ? `entry-type-${expense.id}` : "entry-type"}
+          className="text-slate-900"
+        >
+          Entry type
+        </Label>
+        <select
+          id={expense ? `entry-type-${expense.id}` : "entry-type"}
+          name="entry_type"
+          defaultValue={expense ? (expense.is_tracked ? "expense" : "bill") : "expense"}
+          className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
+        >
+          <option value="expense">Expense</option>
+          <option value="bill">Bill</option>
+        </select>
+      </div>
+      <div className="space-y-2">
         <Label htmlFor={expense ? `account-${expense.id}` : "account"} className="text-slate-900">
           Method
         </Label>
@@ -258,8 +275,8 @@ export function ExpensePanel({
         <div className="space-y-1">
           <h3 className="text-lg font-semibold text-slate-950">Expense actions</h3>
           <p className="text-sm text-slate-700">
-            Add manual spending now, then edit or delete entries with balance
-            reversal built in.
+            Add manual expenses or one-off bills now, then edit or delete
+            entries with balance reversal built in.
           </p>
         </div>
 
@@ -268,7 +285,7 @@ export function ExpensePanel({
             expanded={showAddForm}
             onClick={() => setShowAddForm((current) => !current)}
           >
-            Add Expense
+            Add transaction
           </ToggleButton>
           {showAddForm ? (
             <ExpenseForm

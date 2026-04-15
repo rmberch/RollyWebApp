@@ -1,6 +1,24 @@
 export const accountTypes = ["checking", "savings", "credit", "loan"] as const;
+export const recurringFrequencies = [
+  "daily",
+  "weekly",
+  "biWeekly",
+  "semiMonthly",
+  "monthly",
+  "quarterly",
+  "semiAnnually",
+  "yearly",
+] as const;
+export const paydayFrequencies = [
+  "weekly",
+  "biWeekly",
+  "semiMonthly",
+  "monthly",
+] as const;
 
 export type AccountType = (typeof accountTypes)[number];
+export type RecurringFrequency = (typeof recurringFrequencies)[number];
+export type PaydayFrequency = (typeof paydayFrequencies)[number];
 
 export type AccountRow = {
   id: string;
@@ -23,6 +41,18 @@ export type ScheduledPaymentRow = {
   status: string;
 };
 
+export type RecurringExpenseRow = {
+  id: string;
+  name: string;
+  amount: number;
+  amount_varies: boolean;
+  account_id: string | null;
+  type: "bill" | "subscription";
+  frequency: RecurringFrequency;
+  next_due_date: string;
+  is_active: boolean;
+};
+
 const accountTypeLabels: Record<AccountType, string> = {
   checking: "Checking",
   savings: "Savings",
@@ -30,8 +60,34 @@ const accountTypeLabels: Record<AccountType, string> = {
   loan: "Loan",
 };
 
+const recurringFrequencyLabels: Record<RecurringFrequency, string> = {
+  daily: "Daily",
+  weekly: "Weekly",
+  biWeekly: "Bi-weekly",
+  semiMonthly: "Semi-monthly",
+  monthly: "Monthly",
+  quarterly: "Quarterly",
+  semiAnnually: "Semi-annually",
+  yearly: "Yearly",
+};
+
+const paydayFrequencyLabels: Record<PaydayFrequency, string> = {
+  weekly: "Weekly",
+  biWeekly: "Bi-weekly",
+  semiMonthly: "Semi-monthly",
+  monthly: "Monthly",
+};
+
 export function getAccountTypeLabel(type: AccountType) {
   return accountTypeLabels[type];
+}
+
+export function getRecurringFrequencyLabel(frequency: RecurringFrequency) {
+  return recurringFrequencyLabels[frequency];
+}
+
+export function getPaydayFrequencyLabel(frequency: PaydayFrequency) {
+  return paydayFrequencyLabels[frequency];
 }
 
 export function formatCurrency(value: number | null | undefined) {
@@ -39,6 +95,12 @@ export function formatCurrency(value: number | null | undefined) {
     style: "currency",
     currency: "USD",
   }).format(value ?? 0);
+}
+
+export function getAppDateString(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+  }).format(date);
 }
 
 export function formatTransactionAmount(value: number | null | undefined) {

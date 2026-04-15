@@ -1,5 +1,6 @@
 import { updateSpendingLimit } from "@/app/settings/actions";
 import { AppShell } from "@/components/app-shell";
+import { RecurringSettingsCard } from "@/components/recurring-settings-card";
 import { UserSettingsCard } from "@/components/user-settings-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAuthenticatedAppContext } from "@/lib/app-context";
-import { formatCurrency, formatDate } from "@/lib/rolly";
+import {
+  formatCurrency,
+  formatDate,
+  type RecurringExpenseRow,
+} from "@/lib/rolly";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -39,6 +44,8 @@ async function SettingsContent({
     { data: householdProfiles },
     { count: accountsCount },
     { data: recurringExpenses },
+    { data: recurringAccountsData },
+    { data: paydayAccountsData },
   ] = await Promise.all([
     supabase
       .from("budget_settings")
@@ -60,14 +67,40 @@ async function SettingsContent({
       .eq("household_id", household.id),
     supabase
       .from("recurring_expenses")
-      .select("id, is_active")
-      .eq("household_id", household.id),
+      .select(
+        "id, name, amount, amount_varies, account_id, type, frequency, next_due_date, is_active",
+      )
+      .eq("household_id", household.id)
+      .order("next_due_date")
+      .order("created_at"),
+    supabase
+      .from("accounts")
+      .select("id, name, type")
+      .in("type", ["checking", "savings", "credit"])
+      .order("name"),
+    supabase
+      .from("accounts")
+      .select("id, name")
+      .in("type", ["checking", "savings"])
+      .order("name"),
   ]);
 
   const activeRecurringCount =
     recurringExpenses?.filter((expense) => expense.is_active).length ?? 0;
   const pausedRecurringCount =
     recurringExpenses?.filter((expense) => !expense.is_active).length ?? 0;
+  const recurringItems = (recurringExpenses ?? []) as RecurringExpenseRow[];
+  const recurringAccounts =
+    recurringAccountsData?.map((account) => ({
+      id: account.id,
+      name: account.name,
+      type: account.type,
+    })) ?? [];
+  const paydayAccounts =
+    paydayAccountsData?.map((account) => ({
+      id: account.id,
+      name: account.name,
+    })) ?? [];
   const activeSpendingLimit = Number(
     activePeriod?.spending_limit ?? budgetSettings?.spending_limit ?? 0,
   );
@@ -92,7 +125,7 @@ async function SettingsContent({
     <AppShell
       currentPath="/settings"
       householdName={household.name}
-      subtitle={`${profile.display_name ? `${profile.display_name}, ` : ""}manage your household, budget defaults, and the next migration slices from one place.`}
+      subtitle={`${profile.display_name ? `${profile.display_name}, ` : ""}manage your household, recurring charges, and personal settings from one place.`}
     >
       {params.error ? (
         <div className="rounded-2xl border border-rose-200 bg-white/90 px-4 py-3 text-sm font-medium text-rose-800 shadow-sm">
@@ -171,7 +204,7 @@ async function SettingsContent({
           <CardHeader>
             <CardTitle className="text-slate-950">Recurring expenses</CardTitle>
             <CardDescription className="text-slate-700">
-              This is the next main settings slice and will live here.
+              Keep regular bills and subscriptions organized in one place.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -193,10 +226,10 @@ async function SettingsContent({
                 </p>
               </div>
             </div>
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-700">
-              Bills, subscriptions, cadence editing, and pause/delete controls
-              are next up here.
-            </div>
+            <RecurringSettingsCard
+              recurringExpenses={recurringItems}
+              accounts={recurringAccounts}
+            />
           </CardContent>
         </Card>
 
@@ -250,14 +283,20 @@ async function SettingsContent({
           </CardContent>
         </Card>
 
-        <UserSettingsCard displayName={profile.display_name} />
+        <UserSettingsCard
+          displayName={profile.display_name}
+          nextPayday={profile.next_payday}
+          paydayFrequency={profile.payday_frequency}
+          defaultPaydayAccountId={profile.default_payday_account_id}
+          depositAccounts={paydayAccounts}
+        />
 
         <Card className="border-white/70 bg-white/92 shadow-lg shadow-sky-100">
           <CardHeader>
-            <CardTitle className="text-slate-950">Migration progress</CardTitle>
+            <CardTitle className="text-slate-950">Quick access</CardTitle>
             <CardDescription className="text-slate-700">
-              Core product slices are live and the next work is now centered on
-              recurring logic and history.
+              Jump to the places you are most likely to review throughout the
+              month.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

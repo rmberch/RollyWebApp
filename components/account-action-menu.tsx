@@ -124,8 +124,8 @@ export function AccountActionMenu({
             Account actions
           </h3>
           <p className="text-sm text-slate-700">
-            Common account tasks stay at the top and expand only when you need
-            them.
+            Use these actions to manage payments, deposits, and account details
+            without leaving the page.
           </p>
         </div>
 
@@ -544,8 +544,8 @@ export function AccountActionMenu({
         <div className="space-y-1">
           <h3 className="text-lg font-semibold text-slate-950">Maintenance</h3>
           <p className="text-sm text-slate-700">
-            Less common actions live here so they stay available without taking
-            over the page.
+            Less common updates stay here so they are easy to reach when you
+            need them.
           </p>
         </div>
 

@@ -102,7 +102,7 @@ async function AccountDetailContent({
     <AppShell
       currentPath="/accounts"
       householdName={household.name}
-      subtitle={`Review and update ${account.name}. ${profile.display_name ? `${profile.display_name}, ` : ""}this is the beginning of the account detail flow from the iOS app.`}
+      subtitle={`${profile.display_name ? `${profile.display_name}, ` : ""}review ${account.name}, manage payments, and keep this account up to date.`}
     >
       {query.error ? (
         <div className="rounded-2xl border border-rose-200 bg-white/90 px-4 py-3 text-sm font-medium text-rose-800 shadow-sm">
@@ -176,8 +176,8 @@ async function AccountDetailContent({
             <CardHeader>
               <CardTitle className="text-slate-950">Account overview</CardTitle>
               <CardDescription className="text-slate-700">
-                This matches the first pieces of the account detail screen from
-                the migration spec.
+                A quick summary of the current balance, account type, and any
+                payment details tied to this account.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 text-sm text-slate-800 sm:grid-cols-2">
@@ -224,8 +224,8 @@ async function AccountDetailContent({
                 Recent transactions
               </CardTitle>
               <CardDescription className="text-slate-700">
-                Payments, contributions, and expenses for this account all land
-                in the same running log.
+                Recent activity for this account, including spending, payments,
+                and deposits.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

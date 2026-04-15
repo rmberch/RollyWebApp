@@ -43,7 +43,7 @@ async function AccountsContent({ searchParams }: AccountsPageProps) {
     <AppShell
       currentPath="/accounts"
       householdName={household.name}
-      subtitle={`Manage the shared accounts for ${profile.display_name ?? "your household"}. This is the first feature slice from the migration plan: add accounts, group them by type, and choose the primary account.`}
+      subtitle={`Manage the shared accounts for ${profile.display_name ?? "your household"}. Review balances, organize account types, and choose the account you want to feature on the home screen.`}
     >
       {params.error ? (
         <div className="rounded-2xl border border-rose-200 bg-white/90 px-4 py-3 text-sm font-medium text-rose-800 shadow-sm">
@@ -56,8 +56,8 @@ async function AccountsContent({ searchParams }: AccountsPageProps) {
           <CardHeader>
             <CardTitle className="text-slate-950">Your accounts</CardTitle>
             <CardDescription className="text-slate-700">
-              Accounts are grouped the same way the iOS app organizes them:
-              Checking, Savings, Credit, and Loan.
+              Accounts are grouped by type so it is easy to scan checking,
+              savings, credit, and loan balances at a glance.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -188,15 +188,16 @@ async function AccountsContent({ searchParams }: AccountsPageProps) {
 
           <Card className="border-white/70 bg-slate-950 text-white shadow-lg shadow-sky-100">
             <CardHeader>
-              <CardTitle>Phase 3 plan</CardTitle>
+              <CardTitle>Account tips</CardTitle>
               <CardDescription className="text-slate-300">
-                This accounts slice sets up the next few steps cleanly.
+                A few quick guidelines for keeping balances and payments easy to
+                follow.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-slate-200">
-              <p>Now: grouped list, add-account form, primary account selection.</p>
-              <p>Next: account detail view, payment due state, schedule/apply payment flows.</p>
-              <p>Then: route expenses and recurring items through the selected accounts.</p>
+              <p>Set one account as primary to feature it on the home screen.</p>
+              <p>Keep balances current so payment and spending totals stay useful.</p>
+              <p>Open any account to manage due payments, contributions, and maintenance tasks.</p>
             </CardContent>
           </Card>
         </div>

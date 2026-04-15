@@ -13,7 +13,9 @@ export async function getAuthenticatedAppContext() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, household_id")
+    .select(
+      "display_name, household_id, next_payday, payday_frequency, default_payday_account_id",
+    )
     .eq("id", user.id)
     .maybeSingle();
 
@@ -22,6 +24,7 @@ export async function getAuthenticatedAppContext() {
   }
 
   await supabase.rpc("process_due_scheduled_payments_for_current_user");
+  await supabase.rpc("process_due_recurring_expenses_for_current_user");
 
   const { data: household } = await supabase
     .from("households")

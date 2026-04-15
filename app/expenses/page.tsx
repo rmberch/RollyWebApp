@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getAuthenticatedAppContext } from "@/lib/app-context";
-import { formatCurrency } from "@/lib/rolly";
+import { formatCurrency, getAppDateString } from "@/lib/rolly";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
@@ -35,45 +35,54 @@ async function ExpensesContent({
   await connection();
   const params = await searchParams;
   const { household, profile, supabase } = await getAuthenticatedAppContext();
+  const today = getAppDateString();
 
-  const [{ data: accountsData }, { data: activePeriod }, { data: expensesData }] =
-    await Promise.all([
-      supabase
-        .from("accounts")
-        .select("id, name, type")
-        .in("type", ["checking", "credit"])
-        .order("name"),
-      supabase
-        .from("expense_periods")
-        .select("id, spending_limit, month, year")
-        .eq("status", "active")
-        .order("year", { ascending: false })
-        .order("month", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("expenses")
-        .select("id, period_id, name, amount, date, is_tracked, account_id, source, accounts(name)")
-        .order("date", { ascending: false }),
-    ]);
+  const [{ data: accountsData }, { data: activePeriod }] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("id, name, type")
+      .eq("household_id", household.id)
+      .order("name"),
+    supabase
+      .from("expense_periods")
+      .select("id, spending_limit, month, year")
+      .eq("household_id", household.id)
+      .eq("year", Number(today.slice(0, 4)))
+      .eq("month", Number(today.slice(5, 7)))
+      .order("year", { ascending: false })
+      .order("month", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
-  const accounts =
+  let expensesQuery = supabase
+    .from("expenses")
+    .select("id, period_id, name, amount, date, is_tracked, account_id, source")
+    .eq("household_id", household.id)
+    .order("date", { ascending: false });
+
+  if (activePeriod?.id) {
+    expensesQuery = expensesQuery.eq("period_id", activePeriod.id);
+  } else {
+    expensesQuery = expensesQuery.gte("date", `${today.slice(0, 7)}-01`);
+  }
+
+  const { data: expensesData } = await expensesQuery;
+
+  const householdAccounts =
     accountsData?.map((account) => ({
       id: account.id,
       name: account.name,
       type: account.type,
     })) ?? [];
+  const accounts = householdAccounts.filter((account) => account.type !== "loan");
 
   const accountNameById = new Map(
-    accounts.map((account) => [account.id, account.name]),
+    householdAccounts.map((account) => [account.id, account.name]),
   );
 
-  const activePeriodId = activePeriod?.id ?? null;
-
   const expenses =
-    (expensesData as ExpenseQueryRow[] | null)
-      ?.filter((expense) => !activePeriodId || expense.period_id === activePeriodId)
-      .map((expense) => ({
+    (expensesData as ExpenseQueryRow[] | null)?.map((expense) => ({
         id: expense.id,
         name: expense.name,
         amount: expense.amount,
@@ -85,9 +94,20 @@ async function ExpensesContent({
           : null,
         source: expense.source,
       })) ?? [];
+  const visibleExpenses = expenses.filter((expense) => {
+    if (expense.source === "contribution") {
+      return false;
+    }
 
-  const trackedExpenses = expenses.filter((expense) => expense.is_tracked);
-  const billExpenses = expenses.filter((expense) => !expense.is_tracked);
+    if (expense.source === "payment") {
+      return expense.name.startsWith("Payment to ");
+    }
+
+    return true;
+  });
+
+  const trackedExpenses = visibleExpenses.filter((expense) => expense.is_tracked);
+  const billExpenses = visibleExpenses.filter((expense) => !expense.is_tracked);
   const trackedTotal = trackedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const billTotal = billExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const spendingLimit = Number(activePeriod?.spending_limit ?? 0);
@@ -110,7 +130,7 @@ async function ExpensesContent({
           <CardHeader>
             <CardTitle className="text-slate-950">Add an account first</CardTitle>
             <CardDescription className="text-slate-700">
-              Expenses need at least one checking or credit account so they can
+              Expenses and bills need at least one non-loan account so they can
               affect a balance the same way they do in the iOS app.
             </CardDescription>
           </CardHeader>
@@ -124,7 +144,7 @@ async function ExpensesContent({
                   Transactions
                 </CardDescription>
                 <CardTitle className="text-4xl text-slate-950">
-                  {expenses.length}
+                  {visibleExpenses.length}
                 </CardTitle>
               </CardHeader>
             </Card>
