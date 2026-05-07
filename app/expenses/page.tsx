@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { ExpensePanel } from "@/components/expense-panel";
 import { PersonalSpendingCard } from "@/components/personal-spending-card";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardDescription,
@@ -9,11 +10,13 @@ import {
 } from "@/components/ui/card";
 import { getAuthenticatedAppContext } from "@/lib/app-context";
 import { formatCurrency, getAppDateString } from "@/lib/rolly";
+import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
 type SearchParams = Promise<{
   error?: string;
+  period?: string;
 }>;
 
 type ExpenseQueryRow = {
@@ -28,6 +31,31 @@ type ExpenseQueryRow = {
   source: string;
 };
 
+function getMonthMeta(dateString: string, offsetMonths = 0) {
+  const baseYear = Number(dateString.slice(0, 4));
+  const baseMonth = Number(dateString.slice(5, 7));
+  const monthIndex = baseMonth - 1 + offsetMonths;
+  const year = baseYear + Math.floor(monthIndex / 12);
+  const normalizedMonthIndex = ((monthIndex % 12) + 12) % 12;
+  const month = normalizedMonthIndex + 1;
+  const nextMonthIndex = normalizedMonthIndex === 11 ? 0 : normalizedMonthIndex + 1;
+  const nextMonthYear = normalizedMonthIndex === 11 ? year + 1 : year;
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const end = `${nextMonthYear}-${String(nextMonthIndex + 1).padStart(2, "0")}-01`;
+  const label = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${start}T12:00:00Z`));
+
+  return {
+    year,
+    month,
+    start,
+    end,
+    label,
+  };
+}
+
 async function ExpensesContent({
   searchParams,
 }: {
@@ -37,10 +65,14 @@ async function ExpensesContent({
   const params = await searchParams;
   const { household, profile, supabase } = await getAuthenticatedAppContext();
   const today = getAppDateString();
+  const currentMonth = getMonthMeta(today);
+  const lastMonth = getMonthMeta(today, -1);
+  const selectedPeriod = params.period === "last" ? "last" : "current";
+  const selectedMonth = selectedPeriod === "last" ? lastMonth : currentMonth;
 
   const [
     { data: accountsData },
-    { data: activePeriod },
+    { data: expensePeriodsData },
     { data: householdProfiles },
     { data: budgetSettings },
   ] = await Promise.all([
@@ -53,12 +85,10 @@ async function ExpensesContent({
       .from("expense_periods")
       .select("id, spending_limit, month, year")
       .eq("household_id", household.id)
-      .eq("year", Number(today.slice(0, 4)))
-      .eq("month", Number(today.slice(5, 7)))
+      .in("year", Array.from(new Set([currentMonth.year, lastMonth.year])))
       .order("year", { ascending: false })
       .order("month", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(12),
     supabase
       .from("profiles")
       .select("id, display_name, discretionary_spending_limit")
@@ -69,6 +99,17 @@ async function ExpensesContent({
       .eq("household_id", household.id)
       .maybeSingle(),
   ]);
+
+  const currentPeriod =
+    expensePeriodsData?.find(
+      (period) =>
+        period.year === currentMonth.year && period.month === currentMonth.month,
+    ) ?? null;
+  const previousPeriod =
+    expensePeriodsData?.find(
+      (period) => period.year === lastMonth.year && period.month === lastMonth.month,
+    ) ?? null;
+  const activePeriod = selectedPeriod === "last" ? previousPeriod : currentPeriod;
 
   let expensesQuery = supabase
     .from("expenses")
@@ -81,7 +122,9 @@ async function ExpensesContent({
   if (activePeriod?.id) {
     expensesQuery = expensesQuery.eq("period_id", activePeriod.id);
   } else {
-    expensesQuery = expensesQuery.gte("date", `${today.slice(0, 7)}-01`);
+    expensesQuery = expensesQuery
+      .gte("date", selectedMonth.start)
+      .lt("date", selectedMonth.end);
   }
 
   const { data: expensesData } = await expensesQuery;
@@ -166,7 +209,7 @@ async function ExpensesContent({
     <AppShell
       currentPath="/expenses"
       householdName={household.name}
-      subtitle={`${profile.display_name ? `${profile.display_name}, ` : ""}track spending for the current month, review bills, and adjust entries with proper balance reversal.`}
+      subtitle={`${profile.display_name ? `${profile.display_name}, ` : ""}review spending and transactions for ${selectedMonth.label.toLowerCase()}.`}
     >
       {params.error ? (
         <div className="rounded-2xl border border-rose-200 bg-white/90 px-4 py-3 text-sm font-medium text-rose-800 shadow-sm">
@@ -186,6 +229,43 @@ async function ExpensesContent({
         </Card>
       ) : (
         <>
+          <section className="rounded-[24px] border border-white/70 bg-white/92 p-5 shadow-lg shadow-sky-100">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-700">
+                  Viewing {selectedMonth.label}
+                </p>
+                <h2 className="mt-1 text-2xl font-semibold text-slate-950">
+                  Monthly activity
+                </h2>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  asChild
+                  variant={selectedPeriod === "current" ? "default" : "outline"}
+                  className={
+                    selectedPeriod === "current"
+                      ? "bg-slate-950 text-white hover:bg-slate-800"
+                      : "border-slate-300 bg-white text-slate-950 hover:bg-slate-100"
+                  }
+                >
+                  <Link href="/expenses">Current month</Link>
+                </Button>
+                <Button
+                  asChild
+                  variant={selectedPeriod === "last" ? "default" : "outline"}
+                  className={
+                    selectedPeriod === "last"
+                      ? "bg-slate-950 text-white hover:bg-slate-800"
+                      : "border-slate-300 bg-white text-slate-950 hover:bg-slate-100"
+                  }
+                >
+                  <Link href="/expenses?period=last">Last month</Link>
+                </Button>
+              </div>
+            </div>
+          </section>
+
           <section className="grid gap-4 md:grid-cols-4">
             <Card className="border-white/70 bg-white/92 shadow-lg shadow-sky-100">
               <CardHeader>
