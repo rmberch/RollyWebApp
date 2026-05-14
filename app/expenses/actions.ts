@@ -22,6 +22,17 @@ function normalizeDate(value: FormDataEntryValue | null) {
   return date || getAppDateString();
 }
 
+function getPersonalProfileIds(formData: FormData, isPersonalExpense: boolean) {
+  if (!isPersonalExpense) {
+    return [];
+  }
+
+  return formData
+    .getAll("personal_profile_ids")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+}
+
 export async function addExpense(formData: FormData) {
   const supabase = await getSupabase();
 
@@ -32,9 +43,7 @@ export async function addExpense(formData: FormData) {
   const isTracked = String(formData.get("entry_type") ?? "expense") !== "bill";
   const isPersonalExpense =
     isTracked && String(formData.get("is_personal_expense") ?? "") === "on";
-  const personalProfileId = isPersonalExpense
-    ? String(formData.get("personal_profile_id") ?? "").trim() || null
-    : null;
+  const personalProfileIds = getPersonalProfileIds(formData, isPersonalExpense);
 
   const { error } = await supabase.rpc("add_expense_for_current_user", {
     expense_name: name,
@@ -42,7 +51,8 @@ export async function addExpense(formData: FormData) {
     expense_account_id: accountId,
     expense_date: date,
     expense_is_tracked: isTracked,
-    expense_personal_profile_id: personalProfileId,
+    expense_personal_profile_id: personalProfileIds[0] ?? null,
+    expense_personal_profile_ids: personalProfileIds,
   });
 
   if (error) {
@@ -63,9 +73,7 @@ export async function updateExpense(formData: FormData) {
   const isTracked = String(formData.get("entry_type") ?? "expense") !== "bill";
   const isPersonalExpense =
     isTracked && String(formData.get("is_personal_expense") ?? "") === "on";
-  const personalProfileId = isPersonalExpense
-    ? String(formData.get("personal_profile_id") ?? "").trim() || null
-    : null;
+  const personalProfileIds = getPersonalProfileIds(formData, isPersonalExpense);
 
   const { error } = await supabase.rpc("update_expense_for_current_user", {
     target_expense_id: expenseId,
@@ -74,7 +82,8 @@ export async function updateExpense(formData: FormData) {
     expense_account_id: accountId,
     expense_date: date,
     expense_is_tracked: isTracked,
-    expense_personal_profile_id: personalProfileId,
+    expense_personal_profile_id: personalProfileIds[0] ?? null,
+    expense_personal_profile_ids: personalProfileIds,
   });
 
   if (error) {

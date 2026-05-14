@@ -4,7 +4,7 @@ import { addExpense, deleteExpense, updateExpense } from "@/app/expenses/actions
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatTransactionAmount } from "@/lib/rolly";
+import { formatCurrency, formatTransactionAmount } from "@/lib/rolly";
 import { ChevronDown, ChevronUp, PencilLine, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -23,7 +23,11 @@ type ExpenseRow = {
   account_id: string | null;
   account_name: string | null;
   personal_profile_id?: string | null;
-  personal_profile_name?: string | null;
+  personal_allocations: Array<{
+    profile_id: string;
+    profile_name: string;
+    amount: number;
+  }>;
   source: string;
 };
 
@@ -84,12 +88,39 @@ function ExpenseForm({
   const [entryType, setEntryType] = useState(
     expense ? (expense.is_tracked ? "expense" : "bill") : "expense",
   );
+  const [amountValue, setAmountValue] = useState(String(expense?.amount ?? ""));
   const [isPersonalExpense, setIsPersonalExpense] = useState(
-    Boolean(expense?.personal_profile_id),
+    Boolean(expense?.personal_allocations.length),
   );
+  const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>(() => {
+    const allocationProfileIds =
+      expense?.personal_allocations.map((allocation) => allocation.profile_id) ?? [];
+
+    if (allocationProfileIds.length > 0) {
+      return allocationProfileIds;
+    }
+
+    return householdMembers.map((member) => member.id);
+  });
   const showPersonalFields =
     entryType === "expense" &&
-    (personalSpendingEnabled || Boolean(expense?.personal_profile_id));
+    (personalSpendingEnabled || Boolean(expense?.personal_allocations.length));
+  const splitPreviewAmount = Number(amountValue || 0);
+  const selectedAllocations = householdMembers
+    .filter((member) => selectedProfileIds.includes(member.id))
+    .map((member, index, selectedMembers) => {
+      const amountInCents = Math.round(splitPreviewAmount * 100);
+      const baseCents = Math.floor(amountInCents / selectedMembers.length);
+      const remainder = amountInCents % selectedMembers.length;
+
+      return {
+        ...member,
+        amount:
+          selectedMembers.length > 0
+            ? (baseCents + (index < remainder ? 1 : 0)) / 100
+            : 0,
+      };
+    });
 
   return (
     <form action={onSubmitAction} className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -116,7 +147,8 @@ function ExpenseForm({
           type="number"
           step="0.01"
           min="0.01"
-          defaultValue={expense?.amount ?? ""}
+          value={amountValue}
+          onChange={(event) => setAmountValue(event.target.value)}
           className="border-slate-300 bg-white text-slate-950"
           required
         />
@@ -153,39 +185,74 @@ function ExpenseForm({
               type="checkbox"
               name="is_personal_expense"
               checked={isPersonalExpense}
-              onChange={(event) => setIsPersonalExpense(event.target.checked)}
+              onChange={(event) => {
+                setIsPersonalExpense(event.target.checked);
+
+                if (event.target.checked && selectedProfileIds.length === 0) {
+                  setSelectedProfileIds(householdMembers.map((member) => member.id));
+                }
+              }}
               className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-950 focus:ring-sky-200"
             />
             <div className="space-y-1">
               <p className="font-medium text-slate-950">Personal expense</p>
               <p className="text-sm text-slate-700">
-                Count this against both the household spending limit and one
-                member&apos;s personal spending amount.
+                Count this against both the household spending limit and the
+                selected members&apos; personal spending amounts.
               </p>
             </div>
           </label>
 
           {isPersonalExpense ? (
-            <div className="space-y-2">
-              <Label
-                htmlFor={expense ? `personal-profile-${expense.id}` : "personal-profile"}
-                className="text-slate-900"
-              >
-                Counts against
-              </Label>
-              <select
-                id={expense ? `personal-profile-${expense.id}` : "personal-profile"}
-                name="personal_profile_id"
-                defaultValue={expense?.personal_profile_id ?? householdMembers[0]?.id ?? ""}
-                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-200"
-                required={isPersonalExpense}
-              >
-                {householdMembers.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.display_name}
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-slate-950">Split between</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {householdMembers.map((member) => {
+                  const isSelected = selectedProfileIds.includes(member.id);
+
+                  return (
+                    <label
+                      key={member.id}
+                      className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition-colors ${
+                        isSelected
+                          ? "border-amber-300 bg-amber-50 text-amber-950"
+                          : "border-slate-200 bg-slate-50 text-slate-800"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        name="personal_profile_ids"
+                        value={member.id}
+                        checked={isSelected}
+                        onChange={(event) => {
+                          setSelectedProfileIds((current) =>
+                            event.target.checked
+                              ? [...current, member.id]
+                              : current.filter((id) => id !== member.id),
+                          );
+                        }}
+                        className="h-4 w-4 rounded border-slate-300 text-slate-950 focus:ring-sky-200"
+                      />
+                      <span>{member.display_name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              {selectedAllocations.length > 0 && splitPreviewAmount > 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {selectedAllocations.map((allocation) => (
+                    <div
+                      key={allocation.id}
+                      className="flex items-center justify-between gap-3 py-1"
+                    >
+                      <span>{allocation.display_name}</span>
+                      <span className="font-medium text-slate-950">
+                        {formatCurrency(allocation.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -280,12 +347,28 @@ function ExpenseList({
                       <span className="rounded-full border border-slate-300 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-800">
                         {expense.account_name ?? "Deleted account"}
                       </span>
-                      {expense.personal_profile_name ? (
+                      {expense.personal_allocations.length > 0 ? (
                         <span className="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-950">
-                          Personal · {expense.personal_profile_name}
+                          Personal ·{" "}
+                          {expense.personal_allocations
+                            .map((allocation) => allocation.profile_name)
+                            .join(", ")}
                         </span>
                       ) : null}
                     </div>
+                    {expense.personal_allocations.length > 1 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {expense.personal_allocations.map((allocation) => (
+                          <span
+                            key={allocation.profile_id}
+                            className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-700"
+                          >
+                            {allocation.profile_name}:{" "}
+                            {formatCurrency(allocation.amount)}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                     <p className="text-sm text-slate-700">{expense.date}</p>
                   </div>
 

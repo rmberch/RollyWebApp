@@ -28,6 +28,10 @@ type ExpenseQueryRow = {
   is_tracked: boolean;
   account_id: string | null;
   personal_profile_id: string | null;
+  expense_personal_allocations?: Array<{
+    profile_id: string;
+    amount: number;
+  }> | null;
   source: string;
 };
 
@@ -114,7 +118,7 @@ async function ExpensesContent({
   let expensesQuery = supabase
     .from("expenses")
     .select(
-      "id, period_id, name, amount, date, is_tracked, account_id, personal_profile_id, source",
+      "id, period_id, name, amount, date, is_tracked, account_id, personal_profile_id, source, expense_personal_allocations(profile_id, amount)",
     )
     .eq("household_id", household.id)
     .order("date", { ascending: false });
@@ -127,7 +131,30 @@ async function ExpensesContent({
       .lt("date", selectedMonth.end);
   }
 
-  const { data: expensesData } = await expensesQuery;
+  const { data: expensesWithAllocations, error: expensesWithAllocationsError } =
+    await expensesQuery;
+  let expensesData: ExpenseQueryRow[] | null = expensesWithAllocations;
+
+  if (expensesWithAllocationsError) {
+    let fallbackExpensesQuery = supabase
+      .from("expenses")
+      .select(
+        "id, period_id, name, amount, date, is_tracked, account_id, personal_profile_id, source",
+      )
+      .eq("household_id", household.id)
+      .order("date", { ascending: false });
+
+    if (activePeriod?.id) {
+      fallbackExpensesQuery = fallbackExpensesQuery.eq("period_id", activePeriod.id);
+    } else {
+      fallbackExpensesQuery = fallbackExpensesQuery
+        .gte("date", selectedMonth.start)
+        .lt("date", selectedMonth.end);
+    }
+
+    const { data: fallbackExpensesData } = await fallbackExpensesQuery;
+    expensesData = fallbackExpensesData;
+  }
 
   const householdAccounts =
     accountsData?.map((account) => ({
@@ -170,9 +197,24 @@ async function ExpensesContent({
           ? accountNameById.get(expense.account_id) ?? null
           : null,
         personal_profile_id: expense.personal_profile_id,
-        personal_profile_name: expense.personal_profile_id
-          ? memberNameById.get(expense.personal_profile_id) ?? "Household member"
-          : null,
+        personal_allocations:
+          expense.expense_personal_allocations?.map((allocation) => ({
+            profile_id: allocation.profile_id,
+            profile_name:
+              memberNameById.get(allocation.profile_id) ?? "Household member",
+            amount: Number(allocation.amount),
+          })) ??
+          (expense.personal_profile_id
+            ? [
+                {
+                  profile_id: expense.personal_profile_id,
+                  profile_name:
+                    memberNameById.get(expense.personal_profile_id) ??
+                    "Household member",
+                  amount: Number(expense.amount),
+                },
+              ]
+            : []),
         source: expense.source,
       })) ?? [];
   const visibleExpenses = expenses.filter((expense) => {
@@ -195,8 +237,14 @@ async function ExpensesContent({
   const remaining = spendingLimit - trackedTotal;
   const personalSpendingByMember = householdMembers.map((member) => {
     const spent = trackedExpenses
-      .filter((expense) => expense.personal_profile_id === member.id)
-      .reduce((sum, expense) => sum + expense.amount, 0);
+      .reduce(
+        (sum, expense) =>
+          sum +
+          expense.personal_allocations
+            .filter((allocation) => allocation.profile_id === member.id)
+            .reduce((allocationSum, allocation) => allocationSum + allocation.amount, 0),
+        0,
+      );
 
     return {
       ...member,
