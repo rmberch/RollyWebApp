@@ -8,8 +8,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getMonthMeta } from "@/lib/expense-report";
 import { getAuthenticatedAppContext } from "@/lib/app-context";
 import { formatCurrency, getAppDateString } from "@/lib/rolly";
+import { FileDown } from "lucide-react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -34,31 +36,6 @@ type ExpenseQueryRow = {
   }> | null;
   source: string;
 };
-
-function getMonthMeta(dateString: string, offsetMonths = 0) {
-  const baseYear = Number(dateString.slice(0, 4));
-  const baseMonth = Number(dateString.slice(5, 7));
-  const monthIndex = baseMonth - 1 + offsetMonths;
-  const year = baseYear + Math.floor(monthIndex / 12);
-  const normalizedMonthIndex = ((monthIndex % 12) + 12) % 12;
-  const month = normalizedMonthIndex + 1;
-  const nextMonthIndex = normalizedMonthIndex === 11 ? 0 : normalizedMonthIndex + 1;
-  const nextMonthYear = normalizedMonthIndex === 11 ? year + 1 : year;
-  const start = `${year}-${String(month).padStart(2, "0")}-01`;
-  const end = `${nextMonthYear}-${String(nextMonthIndex + 1).padStart(2, "0")}-01`;
-  const label = new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${start}T12:00:00Z`));
-
-  return {
-    year,
-    month,
-    start,
-    end,
-    label,
-  };
-}
 
 async function ExpensesContent({
   searchParams,
@@ -309,6 +286,16 @@ async function ExpensesContent({
                   }
                 >
                   <Link href="/expenses?period=last">Last month</Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-slate-300 bg-white text-slate-950 hover:bg-slate-100"
+                >
+                  <Link href="/expenses/report?period=last">
+                    <FileDown className="h-4 w-4" />
+                    PDF report
+                  </Link>
                 </Button>
               </div>
             </div>
